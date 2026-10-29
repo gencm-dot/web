@@ -38,7 +38,7 @@
         
         <div id="product-list" class="grid grid-cols-1 gap-4 hidden"></div>
     </main>
-
+    
     <div id="floating-cart" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-20">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
@@ -83,15 +83,15 @@
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
         const STORE_ID = 'STORE-9EF3E4F6';
-
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let products = [];
         let cart = {}; 
 
         async function fetchStoreName() {
             try {
-                const { data, error } = await supabase
+                const { data, error } = await db
                     .from('profiles')
                     .select('store_name')
                     .eq('store_id', STORE_ID)
@@ -103,12 +103,14 @@
                 }
             } catch (err) {
                 document.getElementById('store-name').innerText = "Toko Kami";
+                console.error("Gagal mengambil nama toko:", err);
             }
         }
-
+        
         async function fetchProducts() {
             try {
-                const { data, error } = await supabase
+                // Hanya ambil produk dengan stok > 0
+                const { data, error } = await db
                     .from('products')
                     .select('*')
                     .eq('store_id', STORE_ID)
@@ -125,7 +127,7 @@
             } catch (err) {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('error-msg').classList.remove('hidden');
-                document.getElementById('error-msg').innerText = 'Gagal memuat menu. Pastikan koneksi internet stabil.';
+                document.getElementById('error-msg').innerText = 'Gagal memuat menu: ' + err.message;
             }
         }
 
@@ -172,10 +174,8 @@
             const currentQty = cart[productId].qty;
             const newQty = currentQty + change;
 
-            // Mencegah nilai negatif (-0, -1)
             if (newQty < 0) return;
             
-            // Mencegah melebihi stok
             if (newQty > product.stock) {
                 alert('Maaf, stok tidak mencukupi!');
                 return;
@@ -188,7 +188,7 @@
             }
 
             renderProducts();
-            updateCartUI();
+            updateCartUI(); 
         }
 
         function updateCartUI() {
@@ -233,7 +233,7 @@
                 document.body.classList.remove('modal-open');
             }, 300);
         }
-        
+
         document.querySelectorAll('input[name="payment"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const qrisNote = document.getElementById('qris-note');
@@ -244,7 +244,7 @@
                 }
             });
         });
-        
+
         async function submitOrder() {
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
@@ -252,7 +252,6 @@
 
             try {
                 const paymentMethod = document.querySelector('input[name="payment"]:checked').value;
-                
                 const itemsArray = Object.keys(cart).map(id => ({
                     product_id: id,
                     name: cart[id].data.name,
@@ -263,10 +262,8 @@
 
                 let total = 0;
                 itemsArray.forEach(i => total += i.subtotal);
-
                 const trxId = 'TRX-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-
-                const { error } = await supabase
+                const { error } = await db
                     .from('transactions')
                     .insert([{
                         id: trxId,
@@ -284,7 +281,7 @@
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
-                
+
                 cart = {};
                 renderProducts();
                 updateCartUI();
