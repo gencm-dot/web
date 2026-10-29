@@ -4,13 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Menu Toko</title>
-    <!-- Tailwind CSS untuk tampilan menarik -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body.modal-open { overflow: hidden; }
-        /* Efek skeleton loading */
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
@@ -20,10 +17,8 @@
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 font-sans">
 
-    <!-- Header -->
     <header class="bg-white shadow-sm sticky top-0 z-10">
         <div class="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
-            <!-- Nama Toko akan diisi otomatis oleh JS -->
             <h1 id="store-name" class="text-xl font-bold text-blue-600">Memuat Toko...</h1>
             <div class="relative">
                 <span class="text-2xl">🛒</span>
@@ -32,9 +27,7 @@
         </div>
     </header>
 
-    <!-- Konten Utama -->
     <main class="max-w-md mx-auto p-4 pb-24">
-        <!-- Loading State -->
         <div id="loading" class="space-y-4">
             <div class="h-24 rounded-xl skeleton"></div>
             <div class="h-24 rounded-xl skeleton"></div>
@@ -43,11 +36,9 @@
         
         <div id="error-msg" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4 text-center"></div>
         
-        <!-- Daftar Produk -->
         <div id="product-list" class="grid grid-cols-1 gap-4 hidden"></div>
     </main>
 
-    <!-- Tombol Keranjang Melayang (Floating Cart) -->
     <div id="floating-cart" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-20">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div>
@@ -60,12 +51,10 @@
         </div>
     </div>
 
-    <!-- Modal Checkout -->
     <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-end justify-center">
         <div class="bg-white w-full max-w-md rounded-t-2xl p-6 transform transition-transform duration-300 translate-y-full" id="modal-content">
             <h2 class="text-xl font-bold mb-4 text-gray-800">Konfirmasi Pesanan</h2>
             
-            <!-- Pilihan Pembayaran -->
             <p class="text-sm font-semibold mb-3 text-gray-700">Pilih Metode Pembayaran:</p>
             <div class="flex gap-3 mb-6">
                 <label class="flex-1 flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50 transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
@@ -89,23 +78,17 @@
         </div>
     </div>
 
-    <!-- Script Logika -->
     <script>
-        // ==========================================
-        // KONFIGURASI SUPABASE (GANTI DENGAN MILIK ANDA)
-        // ==========================================
-        const SUPABASE_URL = 'https://[PROJECT-ID].supabase.co'; 
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Anon Key Anda
-        const STORE_ID = 'STORE-12345678'; // Ganti dengan store_id Admin Anda
+        
+        const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
+        const STORE_ID = 'STORE-9EF3E4F6';
 
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let products = [];
         let cart = {}; 
 
-        // ==========================================
-        // 1. AMBIL NAMA TOKO DARI SUPABASE
-        // ==========================================
         async function fetchStoreName() {
             try {
                 const { data, error } = await supabase
@@ -116,19 +99,15 @@
 
                 if (data && data.store_name) {
                     document.getElementById('store-name').innerText = data.store_name;
-                    document.title = data.store_name + " - Menu"; // Ubah judul tab browser
+                    document.title = data.store_name + " - Menu";
                 }
             } catch (err) {
                 document.getElementById('store-name').innerText = "Toko Kami";
             }
         }
 
-        // ==========================================
-        // 2. AMBIL DATA PRODUK DARI SUPABASE
-        // ==========================================
         async function fetchProducts() {
             try {
-                // Hanya ambil produk dengan stok > 0
                 const { data, error } = await supabase
                     .from('products')
                     .select('*')
@@ -139,7 +118,6 @@
                 
                 products = data;
                 
-                // Sembunyikan loading, tampilkan list
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('product-list').classList.remove('hidden');
                 
@@ -151,9 +129,6 @@
             }
         }
 
-        // ==========================================
-        // 3. TAMPILKAN PRODUK KE HTML
-        // ==========================================
         function renderProducts() {
             const container = document.getElementById('product-list');
             container.innerHTML = '';
@@ -186,9 +161,6 @@
             });
         }
 
-        // ==========================================
-        // 4. LOGIKA KERANJANG (VALIDASI STOK)
-        // ==========================================
         function updateQty(productId, change) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
@@ -210,18 +182,15 @@
             }
 
             if (newQty === 0) {
-                delete cart[productId]; // Hapus dari keranjang jika 0
+                delete cart[productId];
             } else {
                 cart[productId].qty = newQty;
             }
 
-            renderProducts(); // Render ulang tampilan
-            updateCartUI();   // Update total
+            renderProducts();
+            updateCartUI();
         }
 
-        // ==========================================
-        // 5. UPDATE TAMPILAN KERANJANG
-        // ==========================================
         function updateCartUI() {
             let total = 0;
             let totalItems = 0;
@@ -237,18 +206,15 @@
             if (totalItems > 0) {
                 countBadge.classList.remove('hidden');
                 countBadge.innerText = totalItems;
-                floatingCart.classList.remove('translate-y-full'); // Tampilkan cart
+                floatingCart.classList.remove('translate-y-full');
             } else {
                 countBadge.classList.add('hidden');
-                floatingCart.classList.add('translate-y-full'); // Sembunyikan cart
+                floatingCart.classList.add('translate-y-full');
             }
 
             document.getElementById('cart-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
         }
 
-        // ==========================================
-        // 6. BUKA / TUTUP MODAL CHECKOUT
-        // ==========================================
         function openCheckout() {
             if (Object.keys(cart).length === 0) return;
             
@@ -267,8 +233,7 @@
                 document.body.classList.remove('modal-open');
             }, 300);
         }
-
-        // Tampilkan pesan khusus jika memilih QRIS
+        
         document.querySelectorAll('input[name="payment"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 const qrisNote = document.getElementById('qris-note');
@@ -279,10 +244,7 @@
                 }
             });
         });
-
-        // ==========================================
-        // 7. KIRIM PESANAN KE SUPABASE (KASIR)
-        // ==========================================
+        
         async function submitOrder() {
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
@@ -291,7 +253,6 @@
             try {
                 const paymentMethod = document.querySelector('input[name="payment"]:checked').value;
                 
-                // Siapkan data item
                 const itemsArray = Object.keys(cart).map(id => ({
                     product_id: id,
                     name: cart[id].data.name,
@@ -303,10 +264,8 @@
                 let total = 0;
                 itemsArray.forEach(i => total += i.subtotal);
 
-                // Buat ID Transaksi unik
                 const trxId = 'TRX-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
 
-                // Masukkan ke tabel transactions di Supabase
                 const { error } = await supabase
                     .from('transactions')
                     .insert([{
@@ -320,14 +279,12 @@
 
                 if (error) throw error;
 
-                // Notifikasi Sukses
                 if (paymentMethod === 'qris') {
                     alert("Pesanan diterima!\n\nSilakan lakukan pembayaran QRIS di meja kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
-
-                // Reset keranjang
+                
                 cart = {};
                 renderProducts();
                 updateCartUI();
@@ -341,7 +298,6 @@
             }
         }
 
-        // Jalankan saat halaman dimuat
         window.onload = () => {
             fetchStoreName();
             fetchProducts();
