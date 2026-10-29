@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Toko - GenPOS</title>
+    <!-- Tailwind CSS untuk tampilan menarik -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Mencegah scroll body saat modal terbuka */
+        body.modal-open { overflow: hidden; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-blue-600">GenPOS Menu</h1>
+            <div class="relative">
+                <span class="text-2xl">🛒</span>
+                <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Konten Utama -->
+    <main class="max-w-md mx-auto p-4 pb-24">
+        <div id="loading" class="text-center py-10 text-gray-500">Memuat menu...</div>
+        <div id="error-msg" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4 text-center"></div>
+        
+        <!-- Daftar Produk -->
+        <div id="product-list" class="grid grid-cols-1 gap-4"></div>
+    </main>
+
+    <!-- Tombol Keranjang Melayang -->
+    <div id="floating-cart" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-lg transform translate-y-full transition-transform duration-300">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div>
+                <p class="text-sm text-gray-500">Total</p>
+                <p id="cart-total" class="text-xl font-bold text-gray-900">Rp 0</p>
+            </div>
+            <button onclick="openCheckout()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">
+                Pesan Sekarang
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Checkout -->
+    <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-end justify-center">
+        <div class="bg-white w-full max-w-md rounded-t-2xl p-6 transform transition-transform duration-300 translate-y-full" id="modal-content">
+            <h2 class="text-xl font-bold mb-4">Konfirmasi Pesanan</h2>
+            
+            <!-- Pilihan Pembayaran -->
+            <p class="text-sm font-semibold mb-2 text-gray-700">Pilih Metode Pembayaran:</p>
+            <div class="flex gap-4 mb-6">
+                <label class="flex-1 flex items-center justify-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="radio" name="payment" value="tunai" class="mr-2" checked>
+                    <span>Tunai (Bayar di Kasir)</span>
+                </label>
+                <label class="flex-1 flex items-center justify-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="radio" name="payment" value="qris" class="mr-2">
+                    <span>QRIS</span>
+                </label>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="closeCheckout()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300">Batal</button>
+                <button id="btn-submit" onclick="submitOrder()" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">Kirim ke Kasir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Logika -->
+    <script>
+        // ==========================================
+        // KONFIGURASI SUPABASE (GANTI DENGAN MILIK ANDA)
+        // ==========================================
+        const SUPABASE_URL = 'https://[PROJECT-ID].supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Anon Key Anda
+        const STORE_ID = 'STORE-12345678'; // Ganti dengan store_id milik Admin yang sedang aktif
+
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let products = [];
+        let cart = {}; // Format: { productId: { qty: number, data: Object } }
+
+        // ==========================================
+        // 1. AMBIL DATA PRODUK DARI SUPABASE
+        // ==========================================
+        async function fetchProducts() {
+            try {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('*')
+                    .eq('store_id', STORE_ID)
+                    .gt('stock', 0); // Hanya tampilkan yang ada stok
+
+                if (error) throw error;
+                
+                products = data;
+                renderProducts();
+                document.getElementById('loading').classList.add('hidden');
+            } catch (err) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error-msg').classList.remove('hidden');
+                document.getElementById('error-msg').innerText = 'Gagal memuat menu. Pastikan toko sedang buka.';
+            }
+        }
+
+        // ==========================================
+        // 2. TAMPILKAN PRODUK KE HTML
+        // ==========================================
+        function renderProducts() {
+            const container = document.getElementById('product-list');
+            container.innerHTML = '';
+
+            if(products.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-10">Belum ada produk tersedia.</p>';
+                return;
+            }
+
+            products.forEach(p => {
+                const qty = cart[p.id] ? cart[p.id].qty : 0;
+                
+                // Jika stok habis (walaupun filter di atas sudah mencegah, ini untuk jaga-jaga)
+                if (p.stock <= 0) return; 
+
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-xl shadow-sm flex justify-between items-center';
+                card.innerHTML = `
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800">${p.name}</h3>
+                        <p class="text-blue-600 font-semibold">Rp ${p.price.toLocaleString('id-ID')}</p>
+                        <p class="text-xs text-gray-500">Stok: ${p.stock}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${qty > 0 ? `
+                            <button onclick="updateQty('${p.id}', -1)" class="w-8 h-8 rounded-full bg-red-100 text-red-600 font-bold flex items-center justify-center">-</button>
+                            <span class="font-bold">${qty}</span>
+                        ` : ''}
+                        <button onclick="updateQty('${p.id}', 1)" class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold flex items-center justify-center">+</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // ==========================================
+        // 3. LOGIKA KERANJANG (TAMBAH/KURANG)
+        // ==========================================
+        function updateQty(productId, change) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            if (!cart[productId]) {
+                cart[productId] = { qty: 0, data: product };
+            }
+
+            const currentQty = cart[productId].qty;
+            const newQty = currentQty + change;
+
+            // VALIDASI: Tidak boleh -0, -1, atau melebihi stok
+            if (newQty < 0) return;
+            if (newQty > product.stock) {
+                alert('Stok tidak mencukupi!');
+                return;
+            }
+
+            if (newQty === 0) {
+                delete cart[productId]; // Hapus dari keranjang jika 0
+            } else {
+                cart[productId].qty = newQty;
+            }
+
+            renderProducts(); // Render ulang tampilan
+            updateCartUI();   // Update total dan angka di ikon
+        }
+
+        // ==========================================
+        // 4. UPDATE TAMPILAN KERANJANG
+        // ==========================================
+        function updateCartUI() {
+            let total = 0;
+            let totalItems = 0;
+
+            for (const key in cart) {
+                total += cart[key].data.price * cart[key].qty;
+                totalItems += cart[key].qty;
+            }
+
+            const countBadge = document.getElementById('cart-count');
+            if (totalItems > 0) {
+                countBadge.classList.remove('hidden');
+                countBadge.innerText = totalItems;
+                document.getElementById('floating-cart').classList.remove('translate-y-full');
+            } else {
+                countBadge.classList.add('hidden');
+                document.getElementById('floating-cart').classList.add('translate-y-full');
+            }
+
+            document.getElementById('cart-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
+        }
+
+        // ==========================================
+        // 5. BUKA / TUTUP MODAL CHECKOUT
+        // ==========================================
+        function openCheckout() {
+            if (Object.keys(cart).length === 0) return;
+            document.getElementById('checkout-modal').classList.remove('hidden');
+            document.body.classList.add('modal-open');
+            
+            // Animasi slide up
+            setTimeout(() => {
+                document.getElementById('modal-content').classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function closeCheckout() {
+            document.getElementById('modal-content').classList.add('translate-y-full');
+            setTimeout(() => {
+                document.getElementById('checkout-modal').classList.add('hidden');
+                document.body.classList.remove('modal-open');
+            }, 300);
+        }
+
+        // ==========================================
+        // 6. KIRIM PESANAN KE SUPABASE (KASIR)
+        // ==========================================
+        async function submitOrder() {
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true;
+            btn.innerText = 'Mengirim...';
+
+            try {
+                // Dapatkan metode pembayaran yang dipilih
+                const paymentMethod = document.querySelector('input[name="payment"]:checked').value;
+                
+                // Siapkan data item
+                const itemsArray = Object.keys(cart).map(id => ({
+                    product_id: id,
+                    name: cart[id].data.name,
+                    price: cart[id].data.price,
+                    qty: cart[id].qty,
+                    subtotal: cart[id].data.price * cart[id].qty
+                }));
+
+                let total = 0;
+                itemsArray.forEach(i => total += i.subtotal);
+
+                // Buat ID Transaksi unik
+                const trxId = 'TRX-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+
+                // Masukkan ke tabel transactions di Supabase
+                const { error } = await supabase
+                    .from('transactions')
+                    .insert([{
+                        id: trxId,
+                        store_id: STORE_ID,
+                        total_amount: total,
+                        metode_pembayaran: paymentMethod,
+                        status: 'pending',
+                        items: itemsArray
+                    }]);
+
+                if (error) throw error;
+
+                // Jika QRIS, beri instruksi WA
+                if (paymentMethod === 'qris') {
+                    alert("Pesanan diterima! Silakan lakukan pembayaran QRIS di kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
+                } else {
+                    alert("Pesanan diterima! Silakan menuju ke meja kasir untuk melakukan pembayaran tunai.");
+                }
+
+                // Reset keranjang dan tutup modal
+                cart = {};
+                renderProducts();
+                updateCartUI();
+                closeCheckout();
+
+            } catch (err) {
+                alert('Gagal mengirim pesanan: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Kirim ke Kasir';
+            }
+        }
+
+        // Jalankan fungsi fetch produk saat halaman dimuat
+        window.onload = fetchProducts;
+    </script>
+</body>
+</html>
