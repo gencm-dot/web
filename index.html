@@ -51,6 +51,10 @@
     <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-end justify-center">
         <div class="bg-white w-full max-w-md rounded-t-2xl p-6 transform transition-transform duration-300 translate-y-full" id="modal-content">
             <h2 class="text-xl font-bold mb-4 text-gray-800">Konfirmasi Pesanan</h2>
+            
+            <label class="block text-sm font-semibold mb-1 text-gray-700">Catatan (Opsional):</label>
+            <textarea id="order-note" rows="2" class="w-full border border-gray-300 rounded-lg p-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Tanpa es, pedas sedang..."></textarea>
+
             <p class="text-sm font-semibold mb-3 text-gray-700">Pilih Metode Pembayaran:</p>
             <div class="flex gap-3 mb-6">
                 <label class="flex-1 flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50 transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
@@ -63,9 +67,10 @@
                 </label>
             </div>
 
-            <p id="qris-note" class="hidden text-xs text-orange-600 bg-orange-50 p-3 rounded-lg mb-4">
-                *Setelah menekan pesan, silakan bayar via QRIS di kasir dan kirim bukti transfer ke WhatsApp Admin.
-            </p>
+            <div id="qris-section" class="hidden mb-4 text-center">
+                <p class="text-xs text-gray-500 mb-1">Scan QRIS di bawah ini:</p>
+                <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
+            </div>
 
             <div class="flex gap-3">
                 <button onclick="closeCheckout()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition">Batal</button>
@@ -85,18 +90,23 @@
 
         let products = [];
         let cart = {}; 
+        let storeQrisUrl = '';
         
         async function fetchStoreName() {
             try {
                 const { data, error } = await db
                     .from('profiles')
-                    .select('store_name')
+                    .select('store_name, qris_url')
                     .eq('store_id', STORE_ID)
                     .single();
 
                 if (data && data.store_name) {
                     document.getElementById('store-name').innerText = data.store_name;
                     document.title = data.store_name + " - Menu"; 
+                    if (data.qris_url) {
+                        storeQrisUrl = data.qris_url;
+                        document.getElementById('qris-image').src = storeQrisUrl;
+                    }
                 } else {
                     document.getElementById('store-name').innerText = "Toko Tidak Ditemukan";
                 }
@@ -230,11 +240,14 @@
 
         document.querySelectorAll('input[name="payment"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
-                const qrisNote = document.getElementById('qris-note');
+                const qrisSection = document.getElementById('qris-section');
                 if (e.target.value === 'qris') {
-                    qrisNote.classList.remove('hidden');
+                    if (!storeQrisUrl) {
+                        alert("QRIS belum diatur oleh Admin.");
+                    }
+                    qrisSection.classList.remove('hidden');
                 } else {
-                    qrisNote.classList.add('hidden');
+                    qrisSection.classList.add('hidden');
                 }
             });
         });
@@ -246,6 +259,7 @@
 
             try {
                 const paymentMethod = document.querySelector('input[name="payment"]:checked').value;
+                const orderNote = document.getElementById('order-note').value.trim();
                 
                 const itemsArray = Object.keys(cart).map(id => ({
                     product_id: id,
@@ -268,18 +282,20 @@
                         total_amount: total,
                         metode_pembayaran: paymentMethod,
                         status: 'pending',
-                        items: itemsArray
+                        items: itemsArray,
+                        catatan: orderNote || null
                     }]);
 
                 if (error) throw error;
 
                 if (paymentMethod === 'qris') {
-                    alert("Pesanan diterima!\n\nSilakan lakukan pembayaran QRIS di meja kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
+                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS di meja kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
 
                 cart = {};
+                document.getElementById('order-note').value = '';
                 renderProducts();
                 updateCartUI();
                 closeCheckout();
