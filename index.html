@@ -14,6 +14,13 @@
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 font-sans">
 
+    <div id="error-page" class="hidden fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center">
+        <h1 class="text-6xl font-bold text-gray-300 mb-4" id="error-code">404</h1>
+        <h2 class="text-2xl font-bold text-gray-700 mb-2" id="error-title">Halaman Tidak Ditemukan</h2>
+        <p class="text-gray-500 mb-6" id="error-desc">Maaf, link yang Anda akses tidak valid atau toko tidak ditemukan.</p>
+        <button onclick="window.location.reload()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Muat Ulang</button>
+    </div>
+
     <header class="bg-white shadow-sm sticky top-0 z-10">
         <div class="max-w-md mx-auto px-4 py-4 flex justify-between items-center">
             <h1 id="store-name" class="text-xl font-bold text-blue-600">Memuat Toko...</h1>
@@ -84,14 +91,27 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
 
         const urlParams = new URLSearchParams(window.location.search);
-        const STORE_ID = urlParams.get('store') || 'STORE-DEFAULT';
+        const rawStoreId = urlParams.get('store') || '';
+        
+        const storeIdRegex = /^STORE-[A-Z0-9]{6,8}$/i;
+        const STORE_ID = storeIdRegex.test(rawStoreId) ? rawStoreId : '';
 
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let products = [];
         let cart = {}; 
         let storeQrisUrl = '';
-        
+
+        function showErrorPage(code, title, desc) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error-code').innerText = code;
+            document.getElementById('error-title').innerText = title;
+            document.getElementById('error-desc').textContent = desc; 
+            document.getElementById('error-page').classList.remove('hidden');
+            document.getElementById('product-list').style.display = 'none';
+            document.getElementById('floating-cart').style.display = 'none';
+        }
+
         async function fetchStoreName() {
             try {
                 const { data, error } = await db
@@ -100,18 +120,19 @@
                     .eq('store_id', STORE_ID)
                     .single();
 
-                if (data && data.store_name) {
-                    document.getElementById('store-name').innerText = data.store_name;
-                    document.title = data.store_name + " - Menu"; 
-                    if (data.qris_url) {
-                        storeQrisUrl = data.qris_url;
-                        document.getElementById('qris-image').src = storeQrisUrl;
-                    }
-                } else {
-                    document.getElementById('store-name').innerText = "Toko Tidak Ditemukan";
+                if (error || !data) {
+                    throw new Error("Not Found");
+                }
+
+                document.getElementById('store-name').innerText = data.store_name;
+                document.title = data.store_name + " - Menu"; 
+                if (data.qris_url) {
+                    storeQrisUrl = data.qris_url;
+                    document.getElementById('qris-image').src = storeQrisUrl;
                 }
             } catch (err) {
-                document.getElementById('store-name').innerText = "Toko Kami";
+                showErrorPage("404", "Toko Tidak Ditemukan", "Toko tidak terdaftar atau telah dinonaktifkan.");
+                throw err; 
             }
         }
 
@@ -132,7 +153,7 @@
             } catch (err) {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('error-msg').classList.remove('hidden');
-                document.getElementById('error-msg').innerText = 'Gagal memuat menu: ' + err.message;
+                document.getElementById('error-msg').innerText = 'Terjadi kesalahan sistem. Silakan coba lagi nanti.';
             }
         }
         
@@ -301,22 +322,31 @@
                 closeCheckout();
 
             } catch (err) {
-                alert('Gagal mengirim pesanan: ' + err.message);
+                alert('Gagal mengirim pesanan. Pastikan koneksi internet stabil.');
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Kirim ke Kasir';
             }
         }
 
-        window.onload = () => {
-            if (STORE_ID === 'STORE-DEFAULT') {
-                document.getElementById('error-msg').classList.remove('hidden');
-                document.getElementById('error-msg').innerText = 'Error: Parameter toko tidak ditemukan di URL.';
-                document.getElementById('loading').classList.add('hidden');
-                return;
+        window.onload = async () => {
+            try {
+                if (!STORE_ID) {
+                    throw new Error("Invalid Store ID Format");
+                }
+                await fetchStoreName();
+                await fetchProducts();
+            } catch (err) {
+                console.warn("Proses dihentikan oleh sistem keamanan atau data tidak ditemukan.");
+                if (!document.getElementById('error-page').classList.contains('hidden')) {
+                    // Error page already shown
+                } else {
+                    showErrorPage("403", "Akses Ditolak", "Parameter ID Toko tidak valid atau mengandung karakter terlarang.");
+                }
+            } finally {
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.classList.add('hidden');
             }
-            fetchStoreName();
-            fetchProducts();
         };
     </script>
 </body>
