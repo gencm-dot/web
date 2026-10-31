@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>Menu Toko</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" 
+            integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" 
+            crossorigin="anonymous"></script>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         body.modal-open { overflow: hidden; }
@@ -38,9 +41,7 @@
             <div class="h-20 rounded-xl skeleton"></div>
             <div class="h-20 rounded-xl skeleton"></div>
         </div>
-        
         <div id="error-msg" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4 text-center"></div>
-        
         <div id="product-list" class="grid grid-cols-1 gap-3 hidden"></div>
     </main>
 
@@ -93,11 +94,8 @@
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
         
-        const TURNSTILE_SITE_KEY = '0x4AAAAAAFtgRHOwM3ep1Ln9'; 
-
         const urlParams = new URLSearchParams(window.location.search);
         const rawStoreId = urlParams.get('store') || '';
-        
         const storeIdRegex = /^STORE-[A-Z0-9]{6,8}$/i;
         const STORE_ID = storeIdRegex.test(rawStoreId) ? rawStoreId : '';
 
@@ -107,6 +105,17 @@
         let cart = {}; 
         let storeQrisUrl = '';
         let turnstileToken = '';
+
+        function escapeHTML(str) {
+            return String(str).replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag]));
+        }
 
         window.onTurnstileSuccess = function(token) {
             turnstileToken = token;
@@ -131,9 +140,7 @@
                     .eq('store_id', STORE_ID)
                     .single();
 
-                if (error || !data) {
-                    throw new Error("Not Found");
-                }
+                if (error || !data) throw new Error("Not Found");
 
                 document.getElementById('store-name').innerText = data.store_name;
                 document.title = data.store_name + " - Menu"; 
@@ -179,13 +186,15 @@
 
             products.forEach(p => {
                 const qty = cart[p.id] ? cart[p.id].qty : 0;
+                const safeName = escapeHTML(p.name);
+                const safeCategory = escapeHTML(p.category);
                 
                 const card = document.createElement('div');
                 card.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center';
                 card.innerHTML = `
                     <div class="flex-1">
-                        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">${p.category}</span>
-                        <h3 class="font-bold text-lg text-gray-800">${p.name}</h3>
+                        <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">${safeCategory}</span>
+                        <h3 class="font-bold text-lg text-gray-800">${safeName}</h3>
                         <p class="text-blue-600 font-semibold mb-1">Rp ${p.price.toLocaleString('id-ID')}</p>
                         <p class="text-xs text-gray-500">Sisa Stok: ${p.stock}</p>
                     </div>
@@ -205,34 +214,25 @@
             const product = products.find(p => p.id === productId);
             if (!product) return;
 
-            if (!cart[productId]) {
-                cart[productId] = { qty: 0, data: product };
-            }
+            if (!cart[productId]) cart[productId] = { qty: 0, data: product };
 
-            const currentQty = cart[productId].qty;
-            const newQty = currentQty + change;
+            const newQty = cart[productId].qty + change;
 
             if (newQty < 0) return;
-            
             if (newQty > product.stock) {
                 alert('Maaf, stok tidak mencukupi!');
                 return;
             }
 
-            if (newQty === 0) {
-                delete cart[productId]; 
-            } else {
-                cart[productId].qty = newQty;
-            }
+            if (newQty === 0) delete cart[productId]; 
+            else cart[productId].qty = newQty;
 
             renderProducts(); 
             updateCartUI();   
         }
         
         function updateCartUI() {
-            let total = 0;
-            let totalItems = 0;
-
+            let total = 0, totalItems = 0;
             for (const key in cart) {
                 total += cart[key].data.price * cart[key].qty;
                 totalItems += cart[key].qty;
@@ -249,7 +249,6 @@
                 countBadge.classList.add('hidden');
                 floatingCart.classList.add('translate-y-full'); 
             }
-
             document.getElementById('cart-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
         }
 
@@ -269,9 +268,7 @@
                 document.body.classList.remove('modal-open');
                 turnstileToken = '';
                 document.getElementById('btn-submit').disabled = true;
-                if (window.turnstile) {
-                    window.turnstile.reset();
-                }
+                if (window.turnstile) window.turnstile.reset();
             }, 300);
         }
 
@@ -279,9 +276,7 @@
             radio.addEventListener('change', (e) => {
                 const qrisSection = document.getElementById('qris-section');
                 if (e.target.value === 'qris') {
-                    if (!storeQrisUrl) {
-                        alert("QRIS belum diatur oleh Admin.");
-                    }
+                    if (!storeQrisUrl) alert("QRIS belum diatur oleh Admin.");
                     qrisSection.classList.remove('hidden');
                 } else {
                     qrisSection.classList.add('hidden');
@@ -331,7 +326,7 @@
                 if (error) throw error;
 
                 if (paymentMethod === 'qris') {
-                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS, lalu kirim bukti transfer via WhatsApp ke Admin.");
+                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS di meja kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
@@ -355,13 +350,11 @@
 
         window.onload = async () => {
             try {
-                if (!STORE_ID) {
-                    throw new Error("Invalid Store ID Format");
-                }
+                if (!STORE_ID) throw new Error("Invalid Store ID Format");
                 await fetchStoreName();
                 await fetchProducts();
             } catch (err) {
-                console.warn("Proses dihentikan oleh sistem keamanan atau data tidak ditemukan.");
+                console.warn("Proses dihentikan.");
                 if (!document.getElementById('error-page').classList.contains('hidden')) {
                 } else {
                     showErrorPage("403", "Akses Ditolak", "Ngapain?");
