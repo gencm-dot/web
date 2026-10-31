@@ -6,7 +6,8 @@
     <title>Menu Toko</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"defer></script>
+    <!-- Script Cloudflare Turnstile -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         body.modal-open { overflow: hidden; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
@@ -79,7 +80,9 @@
                 <p class="text-xs text-gray-500 mb-1">Scan QRIS di bawah ini:</p>
                 <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
             </div>
-            <div id="turnstile-container"></div>
+
+            <!-- Container Cloudflare Turnstile -->
+            <div class="cf-turnstile mb-4 flex justify-center" data-sitekey="0x4AAAAAAFtgRHOwM3ep1Ln9" data-callback="onTurnstileSuccess"></div>
 
             <div class="flex gap-3">
                 <button onclick="closeCheckout()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition">Batal</button>
@@ -91,17 +94,17 @@
     <script>
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
-        const widgetId = turnstile.render("#turnstile-container", {
-	                     sitekey: "0x4AAAAAAFtgRHOwM3ep1Ln9",
-	                     callback: function (token) {
-		                 console.log("Success:", token);
-	                     },
-                         });
+        
+        const TURNSTILE_SITE_KEY = '0x4AAAAAAFtgRHOwM3ep1Ln9'; 
+
         const urlParams = new URLSearchParams(window.location.search);
         const rawStoreId = urlParams.get('store') || '';
+        
         const storeIdRegex = /^STORE-[A-Z0-9]{6,8}$/i;
         const STORE_ID = storeIdRegex.test(rawStoreId) ? rawStoreId : '';
+
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         let products = [];
         let cart = {}; 
         let storeQrisUrl = '';
@@ -330,7 +333,7 @@
                 if (error) throw error;
 
                 if (paymentMethod === 'qris') {
-                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS, lalu kirim bukti transfer via WhatsApp ke Kasir/Admin.");
+                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS, lalu kirim bukti transfer via WhatsApp ke Admin.");
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
@@ -360,7 +363,7 @@
                 await fetchStoreName();
                 await fetchProducts();
             } catch (err) {
-                console.warn("NULL");
+                console.warn("Proses dihentikan oleh sistem keamanan atau data tidak ditemukan.");
                 if (!document.getElementById('error-page').classList.contains('hidden')) {
                 } else {
                     showErrorPage("403", "Akses Ditolak", "Ngapain?");
