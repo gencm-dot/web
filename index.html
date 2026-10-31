@@ -58,9 +58,22 @@
     </div>
 
     <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-end justify-center">
-        <div class="bg-white w-full max-w-md rounded-t-2xl p-6 transform transition-transform duration-300 translate-y-full" id="modal-content">
+        <div class="bg-white w-full max-w-md rounded-t-2xl p-6 transform transition-transform duration-300 translate-y-full max-h-[90vh] overflow-y-auto" id="modal-content">
             <h2 class="text-xl font-bold mb-4 text-gray-800">Konfirmasi Pesanan</h2>
             
+            <!-- Tipe Pesanan -->
+            <p class="text-sm font-semibold mb-3 text-gray-700">Pilih Tipe Pesanan:</p>
+            <div class="flex gap-3 mb-4">
+                <label class="flex-1 flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50 transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                    <input type="radio" name="order_type" value="pickup" class="mr-2 accent-blue-600" checked onchange="handleOrderTypeChange()">
+                    <span class="text-sm font-medium">Ambil Sendiri</span>
+                </label>
+                <label class="flex-1 flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50 transition has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
+                    <input type="radio" name="order_type" value="delivery" class="mr-2 accent-blue-600" onchange="handleOrderTypeChange()">
+                    <span class="text-sm font-medium">Antar / Deliv</span>
+                </label>
+            </div>
+
             <label class="block text-sm font-semibold mb-1 text-gray-700">Catatan (Opsional):</label>
             <textarea id="order-note" rows="2" class="w-full border border-gray-300 rounded-lg p-2 mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Tanpa es, pedas sedang..."></textarea>
 
@@ -130,6 +143,24 @@
             document.getElementById('error-page').classList.remove('hidden');
             document.getElementById('product-list').style.display = 'none';
             document.getElementById('floating-cart').style.display = 'none';
+        }
+
+        function handleOrderTypeChange() {
+            const orderType = document.querySelector('input[name="order_type"]:checked').value;
+            const noteInput = document.getElementById('order-note');
+            
+            if (orderType === 'delivery') {
+                noteInput.focus();
+                noteInput.placeholder = "Wajib: Tulis alamat lengkap pengantaran di sini...";
+                // Tampilkan alert hanya sekali agar tidak mengganggu
+                if (!noteInput.dataset.alerted) {
+                    alert("Anda memilih Antar/Deliv. Silakan tulis alamat lengkap Anda di kolom Catatan.");
+                    noteInput.dataset.alerted = "true";
+                }
+            } else {
+                noteInput.placeholder = "Contoh: Tanpa es, pedas sedang...";
+                noteInput.dataset.alerted = "";
+            }
         }
 
         async function fetchStoreName() {
@@ -296,8 +327,17 @@
 
             try {
                 const paymentMethod = document.querySelector('input[name="payment"]:checked').value;
+                const orderType = document.querySelector('input[name="order_type"]:checked').value;
                 const orderNote = document.getElementById('order-note').value.trim();
                 
+                // Validasi: Jika Delivery, pastikan catatan (alamat) tidak kosong
+                if (orderType === 'delivery' && orderNote === '') {
+                    alert('Mohon isi alamat lengkap Anda di kolom Catatan untuk pesanan Antar/Deliv.');
+                    btn.disabled = false;
+                    btn.innerText = 'Kirim ke Kasir';
+                    return;
+                }
+
                 const itemsArray = Object.keys(cart).map(id => ({
                     product_id: id,
                     name: cart[id].data.name,
@@ -320,7 +360,8 @@
                         metode_pembayaran: paymentMethod,
                         status: 'pending',
                         items: itemsArray,
-                        catatan: orderNote || null
+                        catatan: orderNote || null,
+                        tipe_pesanan: orderType
                     }]);
 
                 if (error) throw error;
@@ -340,11 +381,8 @@
             } catch (err) {
                 alert('Gagal mengirim pesanan. Pastikan koneksi internet stabil.');
             } finally {
-                if (document.getElementById('checkout-modal').classList.contains('hidden')) {
-                    btn.innerText = 'Kirim ke Kasir';
-                } else {
-                    btn.innerText = 'Kirim ke Kasir';
-                }
+                btn.innerText = 'Kirim ke Kasir';
+                if (turnstileToken) btn.disabled = false;
             }
         }
 
@@ -356,8 +394,9 @@
             } catch (err) {
                 console.warn("Proses dihentikan.");
                 if (!document.getElementById('error-page').classList.contains('hidden')) {
+                    // Error page already shown
                 } else {
-                    showErrorPage("403", "Akses Ditolak", "Ngapain?");
+                    showErrorPage("403", "Akses Ditolak", "Parameter ID Toko tidak valid atau mengandung karakter terlarang.");
                 }
             } finally {
                 const loadingEl = document.getElementById('loading');
