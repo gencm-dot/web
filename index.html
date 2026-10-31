@@ -6,7 +6,6 @@
     <title>Menu Toko</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Script Cloudflare Turnstile -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         body.modal-open { overflow: hidden; }
@@ -81,7 +80,6 @@
                 <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
             </div>
 
-            <!-- Container Cloudflare Turnstile -->
             <div class="cf-turnstile mb-4 flex justify-center" data-sitekey="0x4AAAAAAFtgRHOwM3ep1Ln9" data-callback="onTurnstileSuccess"></div>
 
             <div class="flex gap-3">
