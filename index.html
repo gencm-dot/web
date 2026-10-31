@@ -6,6 +6,7 @@
     <title>Menu Toko</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         body.modal-open { overflow: hidden; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
@@ -78,10 +79,11 @@
                 <p class="text-xs text-gray-500 mb-1">Scan QRIS di bawah ini:</p>
                 <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
             </div>
+            <div class="cf-turnstile mb-4 flex justify-center" data-sitekey="TURNSTILE_SITE_KEY_ANDA_DISINI" data-callback="onTurnstileSuccess"></div>
 
             <div class="flex gap-3">
                 <button onclick="closeCheckout()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition">Batal</button>
-                <button id="btn-submit" onclick="submitOrder()" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition shadow-md">Kirim ke Kasir</button>
+                <button id="btn-submit" onclick="submitOrder()" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Kirim ke Kasir</button>
             </div>
         </div>
     </div>
@@ -89,18 +91,21 @@
     <script>
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
-
+        const TURNSTILE_SITE_KEY = '0x4AAAAAAFtgRHOwM3ep1Ln9'; 
         const urlParams = new URLSearchParams(window.location.search);
         const rawStoreId = urlParams.get('store') || '';
-        
         const storeIdRegex = /^STORE-[A-Z0-9]{6,8}$/i;
         const STORE_ID = storeIdRegex.test(rawStoreId) ? rawStoreId : '';
-
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         let products = [];
         let cart = {}; 
         let storeQrisUrl = '';
+        let turnstileToken = '';
+
+        window.onTurnstileSuccess = function(token) {
+            turnstileToken = token;
+            document.getElementById('btn-submit').disabled = false;
+        };
 
         function showErrorPage(code, title, desc) {
             document.getElementById('loading').classList.add('hidden');
@@ -256,6 +261,12 @@
             setTimeout(() => {
                 document.getElementById('checkout-modal').classList.add('hidden');
                 document.body.classList.remove('modal-open');
+                // Reset token saat modal ditutup
+                turnstileToken = '';
+                document.getElementById('btn-submit').disabled = true;
+                if (window.turnstile) {
+                    window.turnstile.reset();
+                }
             }, 300);
         }
 
@@ -274,6 +285,11 @@
         });
 
         async function submitOrder() {
+            if (!turnstileToken) {
+                alert('Silakan selesaikan verifikasi keamanan (Captcha) terlebih dahulu.');
+                return;
+            }
+
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
             btn.innerText = 'Mengirim...';
@@ -310,7 +326,7 @@
                 if (error) throw error;
 
                 if (paymentMethod === 'qris') {
-                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS di meja kasir, lalu kirim bukti transfer via WhatsApp ke Admin.");
+                    alert("Pesanan diterima!\n\nSilakan scan dan bayar QRIS, lalu kirim bukti transfer via WhatsApp ke Kasir/Admin.");
                 } else {
                     alert("Pesanan diterima!\n\nSilakan menuju ke meja kasir untuk melakukan pembayaran Tunai.");
                 }
@@ -324,8 +340,11 @@
             } catch (err) {
                 alert('Gagal mengirim pesanan. Pastikan koneksi internet stabil.');
             } finally {
-                btn.disabled = false;
-                btn.innerText = 'Kirim ke Kasir';
+                if (document.getElementById('checkout-modal').classList.contains('hidden')) {
+                    btn.innerText = 'Kirim ke Kasir';
+                } else {
+                    btn.innerText = 'Kirim ke Kasir';
+                }
             }
         }
 
@@ -337,11 +356,10 @@
                 await fetchStoreName();
                 await fetchProducts();
             } catch (err) {
-                console.warn("Proses dihentikan oleh sistem keamanan atau data tidak ditemukan.");
+                console.warn("NULL");
                 if (!document.getElementById('error-page').classList.contains('hidden')) {
-                    // Error page already shown
                 } else {
-                    showErrorPage("403", "Akses Ditolak", "Parameter ID Toko tidak valid atau mengandung karakter terlarang.");
+                    showErrorPage("403", "Akses Ditolak", "Ngapain?");
                 }
             } finally {
                 const loadingEl = document.getElementById('loading');
