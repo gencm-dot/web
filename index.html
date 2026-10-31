@@ -6,7 +6,7 @@
     <title>Menu Toko</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"defer></script>
     <style>
         body.modal-open { overflow: hidden; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
@@ -79,7 +79,7 @@
                 <p class="text-xs text-gray-500 mb-1">Scan QRIS di bawah ini:</p>
                 <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
             </div>
-            <div class="cf-turnstile mb-4 flex justify-center" data-sitekey="TURNSTILE_SITE_KEY_ANDA_DISINI" data-callback="onTurnstileSuccess"></div>
+            <div id="turnstile-container"></div>
 
             <div class="flex gap-3">
                 <button onclick="closeCheckout()" class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition">Batal</button>
@@ -91,7 +91,12 @@
     <script>
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co'; 
         const SUPABASE_ANON_KEY = 'sb_publishable_5OvXNZ_cqui9sofwe1RytA__VSZ0PN9';
-        const TURNSTILE_SITE_KEY = '0x4AAAAAAFtgRHOwM3ep1Ln9'; 
+        const widgetId = turnstile.render("#turnstile-container", {
+	                     sitekey: "0x4AAAAAAFtgRHOwM3ep1Ln9",
+	                     callback: function (token) {
+		                 console.log("Success:", token);
+	                     },
+                         });
         const urlParams = new URLSearchParams(window.location.search);
         const rawStoreId = urlParams.get('store') || '';
         const storeIdRegex = /^STORE-[A-Z0-9]{6,8}$/i;
@@ -261,7 +266,6 @@
             setTimeout(() => {
                 document.getElementById('checkout-modal').classList.add('hidden');
                 document.body.classList.remove('modal-open');
-                // Reset token saat modal ditutup
                 turnstileToken = '';
                 document.getElementById('btn-submit').disabled = true;
                 if (window.turnstile) {
