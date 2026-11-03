@@ -103,8 +103,7 @@
 
     <script>
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co';
-        // Isi dengan anon key JWT dari Project Settings > API (role: anon). Bukan service_role.
-        const SUPABASE_ANON_KEY = 'ISI_ANON_KEY_JWT_DI_SINI';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2cGJkYnpjdmFodG93cHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODA2NzQsImV4cCI6MjEwODY1NjY3NH0.wfxhfAboj0CC2_eayH-SvKhMLUjWIrrfZM89x1KpC3k';
         const CREATE_ORDER_URL = SUPABASE_URL + '/functions/v1/create-order';
         const IMAGE_BASE = SUPABASE_URL + '/storage/v1/object/public/product-images/';
         const IMAGE_PATH_REGEX = /^STORE-[A-Z0-9]{8,12}\/[A-Za-z0-9._-]{1,100}\.(webp|jpg|jpeg|png)$/i;
