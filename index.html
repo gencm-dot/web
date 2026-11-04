@@ -35,6 +35,19 @@
     </header>
 
     <main class="max-w-md mx-auto p-4 pb-24">
+        <!-- Tab -->
+        <div class="grid grid-cols-2 gap-2 bg-gray-200 p-1 rounded-xl mb-4">
+            <button id="tab-menu" onclick="switchTab('menu')"
+                    class="py-2 rounded-lg text-sm font-semibold transition bg-white shadow text-blue-600">
+                Menu
+            </button>
+            <button id="tab-orders" onclick="switchTab('orders')"
+                    class="py-2 rounded-lg text-sm font-semibold transition text-gray-500 flex items-center justify-center gap-2">
+                Pesanan Berlangsung
+                <span id="orders-badge" class="hidden bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </button>
+        </div>
+
         <div id="loading" class="space-y-4">
             <div class="h-20 rounded-xl skeleton"></div>
             <div class="h-20 rounded-xl skeleton"></div>
@@ -42,6 +55,7 @@
         </div>
         <div id="error-msg" class="hidden bg-red-100 text-red-700 p-4 rounded-lg mb-4 text-center"></div>
         <div id="product-list" class="grid grid-cols-1 gap-3 hidden"></div>
+        <div id="orders-list" class="space-y-3 hidden"></div>
     </main>
 
     <div id="floating-cart" class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] transform translate-y-full transition-transform duration-300 z-20">
@@ -89,7 +103,7 @@
 
             <div id="qris-section" class="hidden mb-4 text-center">
                 <p class="text-xs text-gray-500 mb-1">Scan QRIS di bawah ini:</p>
-                <img id="qris-image" src="" alt="QRIS" class="mx-auto w-40 h-40 object-contain border rounded-lg shadow-sm">
+                <img id="qris-image" src="" alt="QRIS" class="mx-auto w-56 h-56 object-contain border rounded-lg shadow-sm">
             </div>
 
             <div class="cf-turnstile mb-4 flex justify-center" data-sitekey="0x4AAAAAAFtgRHOwM3ep1Ln9" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
@@ -105,6 +119,7 @@
         const SUPABASE_URL = 'https://zvpbdbzcvahtowpxjraw.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2cGJkYnpjdmFodG93cHhqcmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODA2NzQsImV4cCI6MjEwODY1NjY3NH0.wfxhfAboj0CC2_eayH-SvKhMLUjWIrrfZM89x1KpC3k';
         const CREATE_ORDER_URL = SUPABASE_URL + '/functions/v1/create-order';
+        const GET_ORDERS_URL = SUPABASE_URL + '/functions/v1/get-orders';
         const IMAGE_BASE = SUPABASE_URL + '/storage/v1/object/public/product-images/';
         const IMAGE_PATH_REGEX = /^STORE-[A-Z0-9]{8,12}\/[A-Za-z0-9._-]{1,100}\.(webp|jpg|jpeg|png)$/i;
 
@@ -112,14 +127,28 @@
         const rawStoreId = urlParams.get('store') || '';
         const STORE_ID = /^STORE-[A-Z0-9]{8,12}$/i.test(rawStoreId) ? rawStoreId.toUpperCase() : '';
 
+        const ORDERS_KEY = 'orders_' + STORE_ID;
+
+        // Status dari server -> label untuk pelanggan.
+        // pending = menunggu kasir, paid = sedang diproses, siap = siap diambil/diantar (perlu status baru di database).
+        const STATUS_MAP = {
+            pending:  ['Menunggu Kasir',        'bg-yellow-100 text-yellow-700'],
+            menunggu: ['Menunggu Kasir',        'bg-yellow-100 text-yellow-700'],
+            paid:     ['Sedang Diproses',       'bg-blue-100 text-blue-700'],
+            diproses: ['Sedang Diproses',       'bg-blue-100 text-blue-700'],
+            siap:     ['Siap Diambil/Diantar',  'bg-green-100 text-green-700']
+        };
+
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: { persistSession: false, autoRefreshToken: false }
         });
 
         let products = [];
         let cart = {};
+        let orders = [];
         let storeQrisUrl = '';
         let turnstileToken = '';
+        let currentTab = 'menu';
 
         function escapeHTML(str) {
             return String(str).replace(/[&<>'"]/g, tag => ({
@@ -169,6 +198,134 @@
         document.querySelectorAll('input[name="order_type"]').forEach(r =>
             r.addEventListener('change', handleOrderTypeChange));
 
+        /* ---------- TAB ---------- */
+        function switchTab(tab) {
+            currentTab = tab;
+            applyTab();
+        }
+
+        function applyTab() {
+            const isMenu = currentTab === 'menu';
+            const tabMenu = document.getElementById('tab-menu');
+            const tabOrders = document.getElementById('tab-orders');
+
+            tabMenu.className = 'py-2 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ' +
+                (isMenu ? 'bg-white shadow text-blue-600' : 'text-gray-500');
+            tabOrders.className = 'py-2 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ' +
+                (!isMenu ? 'bg-white shadow text-blue-600' : 'text-gray-500');
+
+            document.getElementById('product-list').style.display = isMenu ? '' : 'none';
+            document.getElementById('orders-list').classList.toggle('hidden', isMenu);
+            document.getElementById('floating-cart').style.display = isMenu ? '' : 'none';
+        }
+
+        /* ---------- ORDER HISTORY (localStorage: daftar ID pesanan) ---------- */
+        function getSavedOrderIds() {
+            try { return JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; }
+            catch { return []; }
+        }
+
+        function saveOrderId(id) {
+            const ids = getSavedOrderIds().filter(x => x !== id);
+            ids.unshift(id);
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(ids.slice(0, 30)));
+        }
+
+        function removeFinishedIds(finishedIds) {
+            if (!finishedIds.length) return;
+            const remaining = getSavedOrderIds().filter(x => !finishedIds.includes(x));
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(remaining));
+        }
+
+        async function fetchOrders() {
+            const ids = getSavedOrderIds();
+            if (ids.length === 0) {
+                orders = [];
+                renderOrders();
+                return;
+            }
+
+            try {
+                const res = await fetch(GET_ORDERS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({ store_id: STORE_ID, order_ids: ids })
+                });
+
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+
+                const result = await res.json();
+                removeFinishedIds(result.finished_ids || []);
+                orders = result.orders || [];
+                renderOrders();
+            } catch (err) {
+                console.warn('Gagal memuat pesanan:', err);
+            }
+        }
+
+        function statusInfo(status) {
+            const key = String(status || '').toLowerCase();
+            return STATUS_MAP[key] || [status || 'Sedang Diproses', 'bg-gray-100 text-gray-700'];
+        }
+
+        function renderOrders() {
+            const container = document.getElementById('orders-list');
+            const badge = document.getElementById('orders-badge');
+
+            if (orders.length > 0) {
+                badge.textContent = orders.length;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            container.innerHTML = '';
+
+            if (orders.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-10">Belum ada pesanan yang berlangsung.</p>';
+                return;
+            }
+
+            orders.forEach(o => {
+                const [label, cls] = statusInfo(o.status);
+                const items = Array.isArray(o.items) ? o.items : [];
+                const time = o.created_at
+                    ? new Date(o.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                    : '';
+                const shortId = String(o.id).slice(-6).toUpperCase();
+                const total = o.total ?? 0;
+
+                const itemsHTML = items.map(it => `
+                    <li class="flex justify-between text-sm">
+                        <span>${escapeHTML(it.name ?? '-')}</span>
+                        <span class="text-gray-500">x${escapeHTML(it.qty ?? 1)}</span>
+                    </li>`).join('');
+
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm border border-gray-100 p-4';
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-gray-800">Pesanan #${escapeHTML(shortId)}</span>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full ${cls}">${escapeHTML(label)}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3">
+                        ${escapeHTML(o.tipe_pesanan ?? '')}${o.metode_pembayaran ? ' · ' + escapeHTML(o.metode_pembayaran) : ''}${time ? ' · ' + escapeHTML(time) : ''}
+                    </p>
+                    ${items.length ? `<ul class="space-y-1 border-t border-gray-100 pt-3 mb-3">${itemsHTML}</ul>` : ''}
+                    ${o.catatan ? `<p class="text-xs text-gray-500 mb-3">Catatan: ${escapeHTML(o.catatan)}</p>` : ''}
+                    <div class="flex justify-between items-center border-t border-gray-100 pt-3">
+                        <span class="text-sm text-gray-500">Total</span>
+                        <span class="font-bold text-gray-900">${formatRupiah(total)}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        /* ---------- STORE & PRODUCTS ---------- */
         async function fetchStoreInfo() {
             const { data, error } = await db
                 .from('profiles')
@@ -204,6 +361,7 @@
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('product-list').classList.remove('hidden');
             renderProducts();
+            applyTab();
         }
 
         function renderProducts() {
@@ -222,7 +380,6 @@
                 const card = document.createElement('div');
                 card.className = 'bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col';
 
-                // Gambar produk di atas teks kategori
                 if (p.image_path && IMAGE_PATH_REGEX.test(p.image_path)) {
                     const imgWrap = document.createElement('div');
                     imgWrap.className = 'w-full h-40 bg-gray-100 overflow-hidden';
@@ -317,6 +474,7 @@
             document.getElementById('cart-total').innerText = formatRupiah(total);
         }
 
+        /* ---------- CHECKOUT ---------- */
         function openCheckout() {
             if (Object.keys(cart).length === 0) return;
             document.getElementById('checkout-modal').classList.remove('hidden');
@@ -405,6 +563,10 @@
 
                 if (!res.ok) throw new Error(result.error || 'Gagal memproses pesanan');
 
+                // Simpan ID pesanan agar muncul di tab "Pesanan Berlangsung"
+                const newOrderId = result.order_id || result.id;
+                if (newOrderId) saveOrderId(newOrderId);
+
                 alert(paymentMethod === 'qris'
                     ? 'Pesanan diterima!\n\nSilakan scan dan bayar QRIS di meja kasir.'
                     : 'Pesanan diterima!\n\nSilakan menuju meja kasir untuk membayar tunai.');
@@ -413,6 +575,7 @@
                 document.getElementById('order-note').value = '';
                 await fetchProducts();
                 updateCartUI();
+                await fetchOrders();
                 closeCheckout();
             } catch (err) {
                 alert(err.message || 'Gagal mengirim pesanan. Pastikan koneksi internet stabil.');
@@ -423,6 +586,28 @@
             }
         }
 
+        /* ---------- POLLING (30 detik, hanya saat tab terbuka) ---------- */
+        let pollTimer = null;
+
+        function startPolling() {
+            if (pollTimer || document.visibilityState !== 'visible') return;
+            pollTimer = setInterval(fetchOrders, 30000);
+        }
+
+        function stopPolling() {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetchOrders();
+                startPolling();
+            } else {
+                stopPolling();
+            }
+        });
+
         window.onload = async () => {
             if (!STORE_ID) {
                 showErrorPage('403', 'Akses Ditolak', 'Link toko tidak valid.');
@@ -431,10 +616,13 @@
             try {
                 await fetchStoreInfo();
                 await fetchProducts();
+                await fetchOrders();
+                startPolling();
             } catch (err) {
                 console.warn('Proses dihentikan.');
             } finally {
                 document.getElementById('loading').classList.add('hidden');
+                applyTab();
             }
         };
     </script>
