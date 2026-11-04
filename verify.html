@@ -5,64 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+          content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
     <title>Verifikasi Email - GenPOS</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 40px 20px; background: #f4f6f8; color: #333; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
         h2 { color: #2563eb; margin-top: 0; }
+        h2.error { color: #dc2626; }
         p { color: #64748b; line-height: 1.5; }
-        .btn { background: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; box-shadow: 0 2px 5px rgba(37,99,235,0.3); }
-        .btn[aria-disabled="true"] { display: none; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 id="main-title">Memproses Verifikasi...</h2>
-        <p id="main-desc">Tunggu sebentar.</p>
-        <a id="open-app-btn" href="#" class="btn" aria-disabled="true">Buka Aplikasi GenPOS</a>
+        <h2 id="title">Email Berhasil Diverifikasi!</h2>
+        <p id="desc">Akun GenPOS Anda sudah aktif. Silakan kembali ke aplikasi dan login.</p>
     </div>
 
     <script>
         (function () {
-            var TOKEN_PATTERN = /^[A-Za-z0-9._~-]{16,2048}$/;
-            var TYPE_PATTERN = /^[a-z_]{3,30}$/;
-
-            var title = document.getElementById('main-title');
-            var desc = document.getElementById('main-desc');
-            var btn = document.getElementById('open-app-btn');
-
-            function invalid() {
-                title.textContent = 'Link Tidak Valid';
-                desc.textContent = 'Link ini tidak lengkap atau sudah tidak berlaku. Silakan minta ulang email verifikasi dari aplikasi.';
-                btn.style.display = 'none';
+            // Supabase menambahkan parameter error bila link kedaluwarsa atau sudah dipakai.
+            var raw = window.location.search + window.location.hash;
+            if (/error(_code|_description)?=/.test(raw)) {
+                document.getElementById('title').textContent = 'Link Tidak Berlaku';
+                document.getElementById('title').className = 'error';
+                document.getElementById('desc').textContent = 'Link verifikasi sudah kedaluwarsa atau sudah pernah dipakai. Silakan minta ulang email verifikasi dari aplikasi.';
             }
-
-            // Supabase mengirim token di fragment (#), bukan query. Fragment tidak dikirim ke server.
-            var params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-            var accessToken = params.get('access_token') || '';
-            var refreshToken = params.get('refresh_token') || '';
-            var type = params.get('type') || 'signup';
-
-            if (!TOKEN_PATTERN.test(accessToken) || !TOKEN_PATTERN.test(refreshToken) || !TYPE_PATTERN.test(type)) {
-                invalid();
-                return;
-            }
-
-            // Hanya bawa token yang dibutuhkan aplikasi, bukan seluruh string URL.
-            var query = new URLSearchParams({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                type: type
-            });
-            var deepLink = 'genpos://login-callback#' + query.toString();
-
-            title.textContent = 'Email Berhasil Diverifikasi!';
-            desc.textContent = 'Akun GenPOS Anda telah aktif. Ketuk tombol di bawah untuk kembali ke aplikasi dan masuk.';
-            btn.setAttribute('href', deepLink);
-            btn.setAttribute('aria-disabled', 'false');
-
-            // Hapus token dari riwayat browser setelah dibaca.
+            // Bersihkan parameter dari alamat agar token tidak tersimpan di riwayat browser.
             history.replaceState(null, '', window.location.pathname);
         })();
     </script>
