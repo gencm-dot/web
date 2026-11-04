@@ -184,7 +184,8 @@
             document.getElementById('store-name').innerText = data.store_name;
             document.title = data.store_name + ' - Menu';
 
-            if (data.qris_url && /^https:\/\//i.test(data.qris_url)) {
+            // Terima URL https, atau data URI gambar (app menyimpan QRIS sebagai base64 di qris_url).
+            if (data.qris_url && /^(https:\/\/|data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+\/=]+$)/i.test(data.qris_url)) {
                 storeQrisUrl = data.qris_url;
                 document.getElementById('qris-image').src = storeQrisUrl;
             }
