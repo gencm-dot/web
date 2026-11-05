@@ -130,13 +130,14 @@
         const ORDERS_KEY = 'orders_' + STORE_ID;
 
         // Status dari server -> label untuk pelanggan.
-        // pending = menunggu kasir, paid = sedang diproses, siap = siap diambil/diantar (perlu status baru di database).
+        // pending = menunggu kasir. paid = pembayaran selesai (tampil "Selesai").
+        // Keterangan tambahan untuk paid tergantung tipe_pesanan (pickup / delivery), lihat statusInfo().
         const STATUS_MAP = {
-            pending:  ['Menunggu Kasir',        'bg-yellow-100 text-yellow-700'],
-            menunggu: ['Menunggu Kasir',        'bg-yellow-100 text-yellow-700'],
-            paid:     ['Sedang Diproses',       'bg-blue-100 text-blue-700'],
-            diproses: ['Sedang Diproses',       'bg-blue-100 text-blue-700'],
-            siap:     ['Siap Diambil/Diantar',  'bg-green-100 text-green-700']
+            pending:   ['Menunggu Kasir', 'bg-yellow-100 text-yellow-700'],
+            menunggu:  ['Menunggu Kasir', 'bg-yellow-100 text-yellow-700'],
+            paid:      ['Selesai',        'bg-green-100 text-green-700'],
+            cancelled: ['Dibatalkan',     'bg-red-100 text-red-700'],
+            cancel:    ['Dibatalkan',     'bg-red-100 text-red-700']
         };
 
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -266,9 +267,21 @@
             }
         }
 
-        function statusInfo(status) {
-            const key = String(status || '').toLowerCase();
-            return STATUS_MAP[key] || [status || 'Sedang Diproses', 'bg-gray-100 text-gray-700'];
+        // Mengembalikan [label, class, keterangan] untuk satu pesanan.
+        function statusInfo(order) {
+            const key = String(order.status || '').toLowerCase();
+            const isDelivery = String(order.tipe_pesanan || '').toLowerCase() === 'delivery';
+
+            if (key === 'paid') {
+                const note = isDelivery
+                    ? 'Mohon menunggu, pesanan akan segera sampai.'
+                    : 'Silakan diambil di kasir.';
+                return [STATUS_MAP.paid[0], STATUS_MAP.paid[1], note];
+            }
+
+            const info = STATUS_MAP[key];
+            if (info) return [info[0], info[1], ''];
+            return [order.status || 'Menunggu Kasir', 'bg-gray-100 text-gray-700', ''];
         }
 
         function renderOrders() {
@@ -290,7 +303,7 @@
             }
 
             orders.forEach(o => {
-                const [label, cls] = statusInfo(o.status);
+                const [label, cls, note] = statusInfo(o);
                 const items = Array.isArray(o.items) ? o.items : [];
                 const time = o.created_at
                     ? new Date(o.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
@@ -311,6 +324,7 @@
                         <span class="font-bold text-gray-800">Pesanan #${escapeHTML(shortId)}</span>
                         <span class="text-xs font-semibold px-2 py-1 rounded-full ${cls}">${escapeHTML(label)}</span>
                     </div>
+                    ${note ? `<p class="text-sm font-medium text-gray-700 mb-2">${escapeHTML(note)}</p>` : ''}
                     <p class="text-xs text-gray-500 mb-3">
                         ${escapeHTML(o.tipe_pesanan ?? '')}${o.metode_pembayaran ? ' · ' + escapeHTML(o.metode_pembayaran) : ''}${time ? ' · ' + escapeHTML(time) : ''}
                     </p>
